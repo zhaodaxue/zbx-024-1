@@ -104,6 +104,7 @@ const InspectionPage: React.FC = () => {
   };
 
   const selectedCellar = getSelectedCellar();
+  const maxOpening = selectedCellar?.status === 'need_turn' ? 60 : 100;
 
   return (
     <div>
@@ -159,8 +160,12 @@ const InspectionPage: React.FC = () => {
                 { required: true, message: '请输入阀开度' },
                 {
                   validator: (_, value) => {
-                    if (value < 0 || value > 100) {
-                      return Promise.reject('开度必须在 0-100% 之间');
+                    if (value < 0 || value > maxOpening) {
+                      return Promise.reject(
+                        selectedCellar?.status === 'need_turn'
+                          ? '该窖位处于「需翻窖」状态，开度不能超过 60%'
+                          : '开度必须在 0-100% 之间'
+                      );
                     }
                     return Promise.resolve();
                   },
@@ -169,7 +174,7 @@ const InspectionPage: React.FC = () => {
             >
               <InputNumber
                 min={0}
-                max={100}
+                max={maxOpening}
                 style={{ width: '100%' }}
                 onChange={handleOpeningChange}
                 addonAfter="%"

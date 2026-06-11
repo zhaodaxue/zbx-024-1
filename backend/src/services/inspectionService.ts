@@ -8,6 +8,14 @@ import {
   WeeklyReport,
 } from '../types';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import updateLocale from 'dayjs/plugin/updateLocale';
+
+dayjs.extend(isoWeek);
+dayjs.extend(updateLocale);
+dayjs.updateLocale('en', {
+  weekStart: 1,
+});
 
 export function getAllCellars(): Cellar[] {
   return query<Cellar>('SELECT * FROM cellars ORDER BY cellar_no');
@@ -51,16 +59,26 @@ export function getLastInspection(cellarId: number): Inspection | undefined {
 
 export function getRecentInspections(
   cellarId: number,
-  limit: number = 3
+  limit: number = 3,
+  afterDate?: string
 ): Inspection[] {
-  return query<Inspection>(
-    'SELECT * FROM inspections WHERE cellar_id = ? ORDER BY inspection_time DESC LIMIT ?',
-    [cellarId, limit]
-  );
+  let sql = 'SELECT * FROM inspections WHERE cellar_id = ?';
+  let params: any[] = [cellarId];
+
+  if (afterDate) {
+    sql += ' AND inspection_time > ?';
+    params.push(afterDate);
+  }
+
+  sql += ' ORDER BY inspection_time DESC LIMIT ?';
+  params.push(limit);
+
+  return query<Inspection>(sql, params);
 }
 
 export function checkConsecutiveSour(cellarId: number): boolean {
-  const recent = getRecentInspections(cellarId, 3);
+  const cellar = getCellarById(cellarId);
+  const recent = getRecentInspections(cellarId, 3, cellar?.last_turn_date || undefined);
   if (recent.length < 3) return false;
   return recent.every((ins) => ins.smell === 'sour');
 }
@@ -69,13 +87,26 @@ export function validateInspection(input: InspectionCreateInput): {
   valid: boolean;
   error?: string;
 } {
-  const cellar = getCellarById(input.cellar_id);
-  if (!cellar) {
-    return { valid: false, error: '窖位不存在' };
+  if (input.opening === undefined || input.opening === null || isNaN(input.opening)) {
+    return { valid: false, error: '阀开度不能为空' };
+  }
+
+  if (typeof input.opening !== 'number' || !Number.isFinite(input.opening)) {
+    return { valid: false, error: '阀开度必须是有效数字' };
   }
 
   if (input.opening < 0 || input.opening > 100) {
     return { valid: false, error: '阀开度必须在 0-100% 之间' };
+  }
+
+  const validSmells: SmellType[] = ['normal', 'sour', 'dry'];
+  if (!input.smell || !validSmells.includes(input.smell)) {
+    return { valid: false, error: '气味类型仅允许 normal/sour/dry' };
+  }
+
+  const cellar = getCellarById(input.cellar_id);
+  if (!cellar) {
+    return { valid: false, error: '窖位不存在' };
   }
 
   const lastInspection = getLastInspection(input.cellar_id);
@@ -140,7 +171,7 @@ function updateCellarStatusAfterInspection(
     return;
   }
 
-  const recent = getRecentInspections(cellarId, 3);
+  const recent = getRecentInspections(cellarId, 3, cellar.last_turn_date || undefined);
   if (recent.length >= 3 && recent.every((ins) => ins.smell === 'sour')) {
     updateCellarStatus(cellarId, 'need_turn');
   }
@@ -174,13 +205,22 @@ export function getInspections(
   );
   const total = countResult?.count || 0;
 
-  const offset = (page - 1) * pageSize;
-  const list = query<Inspection>(
-    `SELECT * FROM inspections ${whereClause} 
-     ORDER BY inspection_time DESC 
-     LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset]
-  );
+  let list: Inspection[];
+  if (pageSize <= 0) {
+    list = query<Inspection>(
+      `SELECT * FROM inspections ${whereClause} 
+       ORDER BY inspection_time DESC`,
+      params
+    );
+  } else {
+    const offset = (page - 1) * pageSize;
+    list = query<Inspection>(
+      `SELECT * FROM inspections ${whereClause} 
+       ORDER BY inspection_time DESC 
+       LIMIT ? OFFSET ?`,
+      [...params, pageSize, offset]
+    );
+  }
 
   return { list, total, page, pageSize };
 }

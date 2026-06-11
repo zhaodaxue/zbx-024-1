@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Space, Table, Tag, Row, Col, Statistic, Empty } from 'antd';
+import { Card, Button, Space, Table, Tag, Row, Col, Statistic, Empty, Alert, message } from 'antd';
 import {
   LineChart,
   Line,
@@ -17,6 +17,7 @@ const ReportPage: React.FC = () => {
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadReport();
@@ -24,6 +25,7 @@ const ReportPage: React.FC = () => {
 
   const loadReport = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await reportApi.getWeekly(weekOffset);
       if (res.success) {
@@ -31,6 +33,8 @@ const ReportPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error(error);
+      setLoadError(error.message || '加载周报数据失败');
+      message.error(error.message || '加载周报数据失败');
     } finally {
       setLoading(false);
     }
@@ -145,6 +149,17 @@ const ReportPage: React.FC = () => {
         </Space>
       </div>
 
+      {loadError && (
+        <Alert
+          message="加载失败"
+          description={loadError}
+          type="error"
+          showIcon
+          closable
+          style={{ marginBottom: 24 }}
+        />
+      )}
+
       {report && (
         <>
           <Card
@@ -186,7 +201,7 @@ const ReportPage: React.FC = () => {
             </Row>
           </Card>
 
-          <Card title="各窖位开度均值折线图" style={{ marginBottom: 24 }}>
+          <Card title="各窖位开度变化趋势图" style={{ marginBottom: 24 }}>
             {chartData.length > 0 ? (
               <div style={{ width: '100%', height: 400 }}>
                 <ResponsiveContainer>

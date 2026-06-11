@@ -57,7 +57,7 @@ const ComparePage: React.FC = () => {
     setCompareResult(null);
 
     try {
-      const res = await inspectionApi.getList(1, 100, cellarId);
+      const res = await inspectionApi.getList(1, 0, cellarId);
       if (res.success) {
         setInspections(res.data?.list || []);
       }

@@ -53,7 +53,8 @@ router.post('/cellars/:id/turn', (req: Request, res: Response) => {
 router.get('/inspections', (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const pageSize = parseInt(req.query.pageSize as string) || 20;
+    const pageSizeParam = parseInt(req.query.pageSize as string);
+    const pageSize = isNaN(pageSizeParam) ? 20 : pageSizeParam;
     const cellarId = req.query.cellar_id
       ? parseInt(req.query.cellar_id as string)
       : undefined;
@@ -84,15 +85,29 @@ router.post('/inspections', (req: Request, res: Response) => {
     const { cellar_id, opening, smell, operator, change_reason, inspection_time } =
       req.body;
 
-    if (!cellar_id || opening === undefined || !smell || !operator) {
+    if (!cellar_id || opening === undefined || opening === null || !smell || !operator) {
       return res
         .status(400)
         .json({ success: false, error: '缺少必要参数' });
     }
 
+    const parsedOpening = typeof opening === 'number' ? opening : parseInt(opening);
+    if (isNaN(parsedOpening)) {
+      return res
+        .status(400)
+        .json({ success: false, error: '阀开度必须是有效数字' });
+    }
+
+    const validSmells = ['normal', 'sour', 'dry'];
+    if (!validSmells.includes(smell)) {
+      return res
+        .status(400)
+        .json({ success: false, error: '气味类型仅允许 normal/sour/dry' });
+    }
+
     const inspection = service.createInspection({
-      cellar_id: parseInt(cellar_id),
-      opening: parseInt(opening),
+      cellar_id: typeof cellar_id === 'number' ? cellar_id : parseInt(cellar_id),
+      opening: parsedOpening,
       smell,
       operator,
       change_reason: change_reason || undefined,
@@ -110,10 +125,16 @@ router.get('/inspections/validate/before', (req: Request, res: Response) => {
     const cellar_id = parseInt(req.query.cellar_id as string);
     const opening = parseInt(req.query.opening as string);
 
-    if (!cellar_id || opening === undefined) {
+    if (!cellar_id || isNaN(cellar_id)) {
       return res
         .status(400)
-        .json({ success: false, error: '缺少必要参数' });
+        .json({ success: false, error: '缺少或非法 cellar_id 参数' });
+    }
+
+    if (req.query.opening === undefined || req.query.opening === null || req.query.opening === '' || isNaN(opening)) {
+      return res
+        .status(400)
+        .json({ success: false, error: '缺少或非法 opening 参数' });
     }
 
     const result = service.validateInspection({
