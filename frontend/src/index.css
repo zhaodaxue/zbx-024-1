@@ -1,0 +1,35 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  background-color: #f5f7fa;
+}
+
+.diff-highlight {
+  background-color: #fffbe6 !important;
+}
+
+.page-container {
+  padding: 24px;
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.card-margin {
+  margin-bottom: 16px;
+}
+
+.warning-text {
+  color: #faad14;
+}
+
+.danger-text {
+  color: #ff4d4f;
+}
