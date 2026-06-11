@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Form,
   Select,
@@ -11,7 +11,9 @@ import {
   Space,
   Alert,
   Divider,
+  Modal,
 } from 'antd';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { cellarApi, inspectionApi } from '../api';
 import {
   Cellar,
@@ -23,20 +25,71 @@ import {
   statusLabels,
   statusColors,
 } from '../types';
+import { useTodayProgress } from '../contexts/TodayProgressContext';
 
 const { Option } = Select;
 
 const InspectionPage: React.FC = () => {
   const [form] = Form.useForm();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { refreshProgress, setFormDirty: setGlobalFormDirty } = useTodayProgress();
+
   const [cellars, setCellars] = useState<Cellar[]>([]);
   const [lastInspection, setLastInspection] = useState<Inspection | null>(null);
   const [selectedCellarId, setSelectedCellarId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [needReason, setNeedReason] = useState(false);
+  const [formDirty, setFormDirtyLocal] = useState(false);
+  const pendingCellarIdRef = useRef<number | null>(null);
+  const initialLoadRef = useRef(true);
+
+  useEffect(() => {
+    setGlobalFormDirty(formDirty);
+  }, [formDirty, setGlobalFormDirty]);
 
   useEffect(() => {
     loadCellars();
   }, []);
+
+  useEffect(() => {
+    const cellarIdParam = searchParams.get('cellar_id');
+    const switchConfirmed = searchParams.get('switch_confirmed') === '1';
+
+    if (cellarIdParam && cellars.length > 0) {
+      const id = parseInt(cellarIdParam);
+      const exists = cellars.find((c) => c.id === id);
+      if (exists && id !== selectedCellarId) {
+        if (initialLoadRef.current || switchConfirmed) {
+          initialLoadRef.current = false;
+          doSwitchCellar(id);
+
+          if (switchConfirmed) {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('switch_confirmed');
+            setSearchParams(newParams, { replace: true });
+          }
+        } else if (formDirty) {
+          pendingCellarIdRef.current = id;
+          Modal.confirm({
+            title: '表单尚未提交',
+            content: '当前表单有未提交的内容，确定要切换窖位吗？',
+            okText: '确定切换',
+            cancelText: '继续编辑',
+            onOk: () => {
+              doSwitchCellar(pendingCellarIdRef.current!);
+              pendingCellarIdRef.current = null;
+            },
+            onCancel: () => {
+              pendingCellarIdRef.current = null;
+            },
+          });
+        } else {
+          doSwitchCellar(id);
+        }
+      }
+    }
+  }, [searchParams, cellars]);
 
   const loadCellars = async () => {
     try {
@@ -49,22 +102,41 @@ const InspectionPage: React.FC = () => {
     }
   };
 
-  const handleCellarChange = async (cellarId: number) => {
+  const doSwitchCellar = useCallback((cellarId: number) => {
     setSelectedCellarId(cellarId);
-    form.setFieldsValue({ change_reason: undefined });
+    form.setFieldsValue({ cellar_id: cellarId, change_reason: undefined });
     setNeedReason(false);
+    setFormDirtyLocal(false);
 
-    try {
-      const res = await cellarApi.getLastInspection(cellarId);
+    cellarApi.getLastInspection(cellarId).then((res) => {
       if (res.success) {
         setLastInspection(res.data || null);
       }
-    } catch (error: any) {
+    }).catch((error: any) => {
       message.error(error.message);
+    });
+  }, [form]);
+
+  const handleCellarChange = async (cellarId: number) => {
+    if (formDirty && cellarId !== selectedCellarId) {
+      Modal.confirm({
+        title: '表单尚未提交',
+        content: '当前表单有未提交的内容，确定要切换窖位吗？',
+        okText: '确定切换',
+        cancelText: '继续编辑',
+        onOk: () => {
+          doSwitchCellar(cellarId);
+          setSearchParams({}, { replace: true });
+        },
+      });
+      return;
     }
+    doSwitchCellar(cellarId);
+    setSearchParams({}, { replace: true });
   };
 
   const handleOpeningChange = (value: number | null) => {
+    setFormDirtyLocal(true);
     if (value !== null && lastInspection) {
       const diff = Math.abs(value - lastInspection.opening);
       setNeedReason(diff >= 40);
@@ -74,6 +146,10 @@ const InspectionPage: React.FC = () => {
     } else {
       setNeedReason(false);
     }
+  };
+
+  const handleValuesChange = () => {
+    setFormDirtyLocal(true);
   };
 
   const onFinish = async (values: any) => {
@@ -86,11 +162,15 @@ const InspectionPage: React.FC = () => {
         setLastInspection(null);
         setNeedReason(false);
         setSelectedCellarId(null);
+        setFormDirtyLocal(false);
+        setSearchParams({}, { replace: true });
 
         const updatedCellars = await cellarApi.getAll();
         if (updatedCellars.success) {
           setCellars(updatedCellars.data || []);
         }
+
+        refreshProgress();
       }
     } catch (error: any) {
       message.error(error.message);
@@ -127,6 +207,7 @@ const InspectionPage: React.FC = () => {
             layout="vertical"
             onFinish={onFinish}
             initialValues={{ opening: 50 }}
+            onValuesChange={handleValuesChange}
           >
             <Form.Item
               label="窖位号"
@@ -136,6 +217,7 @@ const InspectionPage: React.FC = () => {
               <Select
                 placeholder="请选择窖位"
                 onChange={handleCellarChange}
+                value={selectedCellarId || undefined}
                 showSearch
                 optionFilterProp="children"
               >

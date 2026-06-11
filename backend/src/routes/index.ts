@@ -50,6 +50,15 @@ router.post('/cellars/:id/turn', (req: Request, res: Response) => {
   }
 });
 
+router.get('/inspections/today-progress', (req: Request, res: Response) => {
+  try {
+    const progress = service.getTodayProgress();
+    res.json({ success: true, data: progress });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 router.get('/inspections', (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;

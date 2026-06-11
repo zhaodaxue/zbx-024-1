@@ -339,6 +339,83 @@ export function compareInspections(
   };
 }
 
+export type SlotStatus = 'completed' | 'pending' | 'overdue';
+
+export interface CellarTodayProgress {
+  cellar_id: number;
+  cellar_no: string;
+  status: CellarStatus;
+  morning: SlotStatus;
+  afternoon: SlotStatus;
+}
+
+export interface TodayProgress {
+  date: string;
+  cellars: CellarTodayProgress[];
+  unfinished_count: number;
+}
+
+export function getTodayProgress(): TodayProgress {
+  const cellars = getAllCellars();
+  const today = dayjs().format('YYYY-MM-DD');
+  const todayStart = `${today} 00:00:00`;
+  const todayEnd = `${today} 23:59:59`;
+  const currentHour = dayjs().hour();
+
+  const cellarProgress: CellarTodayProgress[] = cellars.map((cellar) => {
+    const todayInspections = query<Inspection>(
+      `SELECT * FROM inspections WHERE cellar_id = ? AND inspection_time >= ? AND inspection_time <= ?`,
+      [cellar.id, todayStart, todayEnd]
+    );
+
+    const hasMorning = todayInspections.some((ins) => {
+      const h = dayjs(ins.inspection_time).hour();
+      return h < 12;
+    });
+
+    const hasAfternoon = todayInspections.some((ins) => {
+      const h = dayjs(ins.inspection_time).hour();
+      return h >= 12;
+    });
+
+    let morning: SlotStatus;
+    if (hasMorning) {
+      morning = 'completed';
+    } else if (currentHour >= 12) {
+      morning = 'overdue';
+    } else {
+      morning = 'pending';
+    }
+
+    let afternoon: SlotStatus;
+    if (hasAfternoon) {
+      afternoon = 'completed';
+    } else if (currentHour >= 18) {
+      afternoon = 'overdue';
+    } else {
+      afternoon = 'pending';
+    }
+
+    return {
+      cellar_id: cellar.id,
+      cellar_no: cellar.cellar_no,
+      status: cellar.status,
+      morning,
+      afternoon,
+    };
+  });
+
+  const unfinishedCount = cellarProgress.filter(
+    (c) => c.morning !== 'completed' || c.afternoon !== 'completed'
+  ).length;
+
+  return {
+    date: today,
+    cellars: cellarProgress,
+    unfinished_count: unfinishedCount,
+  };
+}
+
 export function markCellarTurned(cellarId: number): void {
   const turnDate = dayjs().format('YYYY-MM-DD HH:mm:ss');
   run(

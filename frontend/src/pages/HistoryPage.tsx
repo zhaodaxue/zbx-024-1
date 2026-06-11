@@ -7,8 +7,9 @@ import {
   Button,
   Modal,
   message,
-  Popconfirm,
+  Alert,
 } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { cellarApi, inspectionApi } from '../api';
 import {
   Cellar,
@@ -20,11 +21,14 @@ import {
   statusLabels,
   statusColors,
 } from '../types';
+import { useTodayProgress } from '../contexts/TodayProgressContext';
 import dayjs from 'dayjs';
 
 const { Option } = Select;
 
 const HistoryPage: React.FC = () => {
+  const { getUnfinishedCellars, refreshProgress, navigateToInspection } = useTodayProgress();
+
   const [cellars, setCellars] = useState<Cellar[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [total, setTotal] = useState(0);
@@ -83,6 +87,7 @@ const HistoryPage: React.FC = () => {
         message.success(`窖位 ${cellar.cellar_no} 已标记为翻窖完成`);
         loadCellars();
         loadInspections();
+        refreshProgress();
         setTurnModalVisible(false);
       }
     } catch (error: any) {
@@ -93,6 +98,19 @@ const HistoryPage: React.FC = () => {
   const showTurnModal = (cellar: Cellar) => {
     setSelectedCellar(cellar);
     setTurnModalVisible(true);
+  };
+
+  const handleUnfinishedClick = (cellarId: number) => {
+    navigateToInspection(cellarId);
+  };
+
+  const unfinishedCellars = getUnfinishedCellars();
+
+  const getSlotLabel = (slot: 'morning' | 'afternoon', status: string) => {
+    if (status === 'completed') return null;
+    const periodLabel = slot === 'morning' ? '上午' : '下午';
+    if (status === 'overdue') return `${periodLabel}超时`;
+    return `${periodLabel}未巡`;
   };
 
   const columns = [
@@ -179,7 +197,62 @@ const HistoryPage: React.FC = () => {
 
   return (
     <div>
-      <h2 style={{ marginBottom: 24 }}>历史记录</h2>
+      <h2 style={{ marginBottom: 16 }}>历史记录</h2>
+
+      {unfinishedCellars.length > 0 && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #fffbe6 0%, #fff7e6 100%)',
+            border: '1px solid #ffd591',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 16,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <span style={{ color: '#faad14', fontSize: 16, marginRight: 4 }}>
+              ⚠️
+            </span>
+            <span style={{ fontWeight: 500, color: '#d46b08' }}>
+              今日仍有 <strong style={{ fontSize: 18 }}>{unfinishedCellars.length}</strong> 个窖位未完成双巡：
+            </span>
+            {unfinishedCellars.map((c) => {
+              const missingSlots: string[] = [];
+              const mLabel = getSlotLabel('morning', c.morning);
+              if (mLabel) missingSlots.push(mLabel);
+              const aLabel = getSlotLabel('afternoon', c.afternoon);
+              if (aLabel) missingSlots.push(aLabel);
+              return (
+                <Tag
+                  key={c.cellar_id}
+                  color={c.status === 'need_turn' ? 'red' : 'warning'}
+                  style={{
+                    margin: 0,
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    fontSize: 13,
+                    borderRadius: 4,
+                  }}
+                  onClick={() => handleUnfinishedClick(c.cellar_id)}
+                >
+                  <strong>{c.cellar_no}</strong>
+                  <span style={{ opacity: 0.85, marginLeft: 4 }}>
+                    ({missingSlots.join('、')})
+                  </span>
+                </Tag>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div
         style={{

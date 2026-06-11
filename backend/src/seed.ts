@@ -63,12 +63,20 @@ function generateInspections(): SeedInspection[] {
   const today = dayjs();
   const startDate = today.subtract(14, 'day');
 
-  for (let day = 0; day < 14; day++) {
+  for (let day = 0; day < 15; day++) {
     const currentDate = startDate.add(day, 'day');
+    const isToday = day === 14;
     const isWeekend = day % 7 === 5 || day % 7 === 6;
 
     for (const cellar of cellars) {
       for (const shift of [0, 1]) {
+        if (isToday && shift === 1) {
+          const skipCellars = ['A02', 'A04', 'B01', 'B03'];
+          if (skipCellars.includes(cellar.no)) {
+            continue;
+          }
+        }
+
         const hour = shift === 0 ? 8 : 16;
         const minute = Math.floor(Math.random() * 30);
         const inspectionTime = currentDate
@@ -204,8 +212,9 @@ async function run() {
 
   console.log('\n🎉 种子数据生成完成！');
   console.log('   - 8 个窖位');
-  console.log('   - 14 天巡检记录（每日两次）');
+  console.log('   - 15 天巡检记录（含今日）');
   console.log('   - 1 个待翻窖案例（A03）');
+  console.log('   - 今日上午全部已巡，A02/A04/B01/B03 缺下午巡');
 }
 
 run();

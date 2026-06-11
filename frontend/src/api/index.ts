@@ -6,6 +6,7 @@ import {
   WeeklyReport,
   CompareResult,
   InspectionCreateInput,
+  TodayProgress,
   ApiResponse,
 } from '../types';
 
@@ -56,6 +57,8 @@ export const inspectionApi = {
     id2: number
   ): Promise<ApiResponse<CompareResult>> =>
     api.get('/inspections/compare/diff', { params: { id1, id2 } }),
+  getTodayProgress: (): Promise<ApiResponse<TodayProgress>> =>
+    api.get('/inspections/today-progress'),
 };
 
 export const reportApi = {

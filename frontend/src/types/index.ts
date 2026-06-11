@@ -57,6 +57,22 @@ export interface WeeklyReport {
   need_turn_list: string[];
 }
 
+export type SlotStatus = 'completed' | 'pending' | 'overdue';
+
+export interface CellarTodayProgress {
+  cellar_id: number;
+  cellar_no: string;
+  status: CellarStatus;
+  morning: SlotStatus;
+  afternoon: SlotStatus;
+}
+
+export interface TodayProgress {
+  date: string;
+  cellars: CellarTodayProgress[];
+  unfinished_count: number;
+}
+
 export interface CompareResult {
   inspection1: Inspection;
   inspection2: Inspection;
